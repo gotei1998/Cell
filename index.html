@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Клетка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Caveat:wght@600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a squared exam notebook page. The red margin line divides the topic list from the working. */
+:root {
+  --paper: #292929; --grid: #333333; --ink: #f4eef0; --muted: #b9afb2;
+  --blue: #c88e9b; --red: #c88e9b; --green: #c88e9b; --field: #303030; --line: #4b4b4b;
+  --soft: #3a3a3a; color-scheme: dark;
+  --body: "Golos Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", Consolas, monospace;
+  --hand: "Caveat", "Segoe Print", cursive;
+}
+* { box-sizing: border-box }
+body {
+  background-color: var(--paper); color: var(--ink); font: 16px/1.6 var(--body);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.page {
+  display: grid; grid-template-columns: 216px minmax(0, 1fr); max-width: 1120px; margin: 0 auto;
+  padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px));
+}
+.rail { padding-block: 28px; padding-right: 20px; border-right: 2px solid var(--red); min-height: 100vh }
+.brand { font: 600 44px/1 var(--hand); color: var(--blue); margin: 0 }
+.tagline { font-size: 13px; color: var(--muted); margin: 6px 0 22px; line-height: 1.4 }
+.topics { display: grid; gap: 2px }
+.topics button {
+  all: unset; box-sizing: border-box; cursor: pointer; padding: 7px 14px; border-radius: 999px; font-size: 15px;
+}
+.topics button:hover { background: var(--soft) }
+.topics button[aria-pressed="true"] { background: var(--blue); color: var(--paper); font-weight: 600 }
+.topics button:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--red); outline-offset: 2px }
+.history { margin-top: 28px }
+.history h2, .label { font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 6px }
+.history button {
+  all: unset; display: block; box-sizing: border-box; width: 100%; cursor: pointer; font: 12.5px/1.4 var(--mono); color: var(--muted);
+  padding: 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.history button:hover { color: var(--blue) }
+main { padding-block: 28px 56px; padding-left: 28px; min-width: 0; display: grid; gap: 24px; align-content: start }
+h1 { font-size: 26px; line-height: 1.25; font-weight: 700; margin: 0; text-wrap: balance }
+.hint { color: var(--muted); font-size: 14px; margin: 4px 0 0 }
+form { background: var(--field); border: 1px solid var(--line); padding: 16px; display: grid; gap: 12px }
+.row { display: flex; flex-wrap: wrap; gap: 12px }
+.field { display: grid; gap: 4px; flex: 1 1 110px; min-width: 0 }
+.field.wide { flex-basis: 100% }
+.field label { font-size: 13px; color: var(--muted) }
+input, textarea, select {
+  font: 16px/1.5 var(--mono); color: var(--ink); background: var(--paper); border: 1px solid var(--line);
+  padding: 8px 10px; width: 100%; border-radius: 0;
+}
+textarea { resize: vertical; min-height: 92px }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center }
+.go {
+  font: 600 16px var(--body); color: var(--paper); background: var(--blue); border: 0; padding: 10px 26px; border-radius: 999px; cursor: pointer;
+}
+.go:disabled { opacity: .55; cursor: wait }
+.photo { font: 600 16px var(--body); color: var(--blue); border: 1px solid var(--blue); padding: 9px 20px; border-radius: 999px; cursor: pointer }
+.photo:hover { background: var(--soft) }
+.key { font-size: 14px; color: var(--muted) }
+.key summary { cursor: pointer }
+.key p { margin: 6px 0; max-width: 66ch }
+.samples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted) }
+.samples button { all: unset; cursor: pointer; font: 13px var(--mono); color: var(--blue); border-bottom: 1px dashed var(--blue) }
+#preview { min-height: 32px; overflow-x: auto; color: var(--ink) }
+#status { font-size: 14px; color: var(--muted) }
+.bar { height: 3px; background: var(--soft); overflow: hidden; margin-top: 6px; max-width: 320px }
+.bar i { display: block; height: 100%; width: 35%; background: var(--blue); animation: slide 1.3s infinite ease-in-out }
+@keyframes slide { from { transform: translateX(-100%) } to { transform: translateX(300%) } }
+@media (prefers-reduced-motion: reduce) { .bar i { animation: none; width: 100% } }
+.error { border-left: 4px solid var(--red); background: var(--field); padding: 10px 14px }
+#result { display: grid; gap: 20px; min-width: 0 }
+.answer { background: var(--field); border: 2px solid var(--blue); padding: 14px 16px; position: relative; min-width: 0 }
+.mathwrap { overflow-x: auto; overflow-y: hidden; max-width: 100% }
+.check { font: 600 23px/1.2 var(--hand); margin: 8px 0 0 }
+.check.ok { color: var(--green) }
+.check.bad { color: var(--red) }
+.note { font-size: 14px; color: var(--muted); margin: 8px 0 0 }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px }
+.steps li { min-width: 0 }
+.steps .sm { margin-top: 4px; font-size: 15px }
+.steps li.d1 { padding-left: 18px; border-left: 2px solid var(--line) }
+.steps li.d2 { margin-left: 18px; padding-left: 18px; border-left: 2px solid var(--line) }
+.steps li.d3 { margin-left: 36px; padding-left: 18px; border-left: 2px solid var(--line) }
+section > h2 { font-size: 18px; margin: 0 0 8px }
+#plot { background: var(--field); border: 1px solid var(--line); padding: 8px; overflow-x: auto }
+#plot svg { display: block; width: 100%; height: auto; min-width: 300px }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); padding: 4px 6px }
+.legend b { font-weight: 500 }
+.legend b.a { color: var(--blue) }
+.legend b.b { color: var(--ink) }
+.theory { display: grid; gap: 14px }
+.theory article { background: var(--field); border: 1px solid var(--line); padding: 12px 16px; min-width: 0 }
+.theory h3 { font-size: 16px; margin: 0 0 4px }
+.theory p { margin: 6px 0; max-width: 66ch; font-size: 15px }
+.topics button, .history button, .samples button, .go, .photo, .key summary {
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease, filter .18s ease, transform .12s ease;
+}
+.go:not(:disabled):hover { filter: brightness(1.1); transform: translateY(-1px) }
+.photo:hover, .topics button:hover { transform: translateY(-1px) }
+.samples button:hover, .key summary:hover { color: var(--ink) }
+.samples button:hover { border-bottom-color: var(--ink) }
+.history button:hover { transform: translateX(3px) }
+.go:not(:disabled):active, .photo:active, .topics button:active, .samples button:active, .history button:active { transform: scale(.96) }
+.key summary:active { color: var(--blue) }
+@media (prefers-reduced-motion: reduce) {
+  .topics button, .history button, .samples button, .go, .photo, .key summary { transition: none; transform: none !important }
+}
+@media (max-width: 760px) {
+  .page { display: block }
+  .rail { border-right: 0; border-bottom: 2px solid var(--red); min-height: 0; padding-block: 18px 12px; padding-right: 0 }
+  .brand { font-size: 36px }
+  .tagline { margin-bottom: 12px }
+  .topics { display: flex; flex-wrap: wrap; gap: 4px }
+  .topics button { padding: 4px 9px; font-size: 14px; border: 1px solid var(--line) }
+  .history { display: none }
+  main { padding-left: 0; padding-top: 20px }
+}
+</style>
+
+<div class="page">
+  <aside class="rail">
+    <p class="brand">Клетка</p>
+    <p class="tagline">Решает задачи высшей математики по шагам и проверяет ответ</p>
+    <nav class="topics" id="topics" aria-label="Темы"></nav>
+    <div class="history" id="history" hidden>
+      <h2>Недавние</h2>
+      <div id="historyList"></div>
+    </div>
+  </aside>
+  <main>
+    <header>
+      <h1 id="title"></h1>
+      <p class="hint" id="hint"></p>
+    </header>
+    <form id="form" autocomplete="off">
+      <div class="row" id="fields"></div>
+      <div id="preview" class="mathwrap" aria-live="polite"></div>
+      <div class="actions">
+        <button class="go" id="go" type="submit">Решить</button>
+        <label class="photo" for="photoInput">Загрузить фото</label>
+        <input id="photoInput" type="file" accept="image/*" hidden>
+        <div class="samples" id="samples"></div>
+      </div>
+      <details class="key">
+        <summary>Рукописные задачи и формулы: подключить нейросети</summary>
+        <p>Без ключей сайт читает только чёткий печатный текст в одну строку. С бесплатным ключом он разбирает дроби, индексы и почерк. Если у одной нейросети закончился лимит, сайт сам перейдёт к следующей по порядку. Ключи хранятся только в этом браузере, а фото уходит напрямую выбранной службе.</p>
+        <div class="row" id="keyFields"></div>
+      </details>
+      <div id="status" role="status"></div>
+    </form>
+    <div id="result"></div>
+    <section id="plotBox" hidden>
+      <h2>График</h2>
+      <div id="plot"></div>
+    </section>
+    <section>
+      <h2>Теория по теме</h2>
+      <div class="theory" id="theory"></div>
+    </section>
+  </main>
+</div>
+
+<script src="runtime/telegram-web-app.js"></script>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']] }, svg: { fontCache: 'global' }, startup: { typeset: false } };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"></script>
+<script>
+const LIMIT_MS = 45000;
+
+const F = {
+  f: (label, value, wide = true) => ({ id: 'f', label, value, wide }),
+  var: (value) => ({ id: 'var', label: 'Переменная', value }),
+};
+
+const TOPICS = {
+  derivative: {
+    name: 'Производные', title: 'Производная функции', hint: 'Пишите как на бумаге: x^2 sin x, e^(2x), arctg x, ln(x+1).',
+    fields: [F.f('Функция', 'x^2*sin(x)'), F.var('x'), { id: 'order', label: 'Порядок', value: '1' }],
+    samples: [{ f: 'x^2*sin(x)' }, { f: 'ln(x^2+1)/x' }, { f: 'x^x' }, { f: 'arctg(e^(2x))', order: '2' }],
+  },
+  integral: {
+    name: 'Интегралы', title: 'Интеграл', hint: 'Оставьте пределы пустыми, чтобы найти первообразную.',
+    fields: [F.f('Подынтегральная функция', 'x^2*e^x'), F.var('x'), { id: 'a', label: 'Нижний предел', value: '' }, { id: 'b', label: 'Верхний предел', value: '' }],
+    samples: [{ f: 'x^2*e^x', a: '', b: '' }, { f: '1/(x^2+4x+5)', a: '', b: '' }, { f: 'sin(x)^2', a: '0', b: 'pi' }, { f: 'e^(-x^2)', a: '-oo', b: 'oo' }],
+  },
+  limit: {
+    name: 'Пределы', title: 'Предел функции', hint: 'Бесконечность пишется как oo, число π как pi.',
+    fields: [F.f('Функция', '(1-cos(x))/x^2'), F.var('x'), { id: 'point', label: 'Точка', value: '0' },
+      { id: 'side', label: 'Сторона', value: '+-', options: [['+-', 'с обеих сторон'], ['+', 'справа'], ['-', 'слева']] }],
+    samples: [{ f: '(1-cos(x))/x^2', point: '0' }, { f: '(1+1/x)^x', point: 'oo' }, { f: 'ln(x)/x', point: 'oo' }, { f: '1/x', point: '0' }],
+  },
+  sum: {
+    name: 'Ряды и суммы', title: 'Сумма ряда', hint: 'Проверяет сходимость и находит сумму. Конец oo означает бесконечный ряд.',
+    fields: [F.f('Общий член', '1/n^2'), F.var('n'), { id: 'a', label: 'От', value: '1' }, { id: 'b', label: 'До', value: 'oo' }],
+    samples: [{ f: '1/n^2', a: '1', b: 'oo' }, { f: '1/n', a: '1', b: 'oo' }, { f: 'n/2^n', a: '1', b: 'oo' }, { f: 'k^2', var: 'k', a: '1', b: '10' }],
+  },
+  taylor: {
+    name: 'Ряд Тейлора', title: 'Разложение в ряд Тейлора', hint: 'В точке 0 это ряд Маклорена.',
+    fields: [F.f('Функция', 'e^x*cos(x)'), F.var('x'), { id: 'point', label: 'Точка', value: '0' }, { id: 'order', label: 'Порядок', value: '5' }],
+    samples: [{ f: 'e^x*cos(x)', point: '0' }, { f: 'ln(1+x)', point: '0' }, { f: 'sin(x)', point: 'pi/2' }],
+  },
+  logs: {
+    name: 'Логарифмы', title: 'Логарифмы', hint: 'Выражение, уравнение или неравенство. Основание пишется так: log_2(x), log_(1/2)(x), lg(x), ln(x).',
+    fields: [F.f('Выражение, уравнение или неравенство', 'log_2(x-1) + log_2(x+1) = 3')],
+    samples: [{ f: 'log_2(x-1) + log_2(x+1) = 3' }, { f: 'lg(25) + lg(4)' }, { f: 'lg(x)^2 - 3lg(x) + 2 = 0' }, { f: 'log_(1/2)(x-1) > -2' }, { f: 'log_x(8) = 3' }],
+  },
+  matrix: {
+    name: 'Матрицы', title: 'Матрицы', hint: 'Каждая строка матрицы с новой строки, элементы через пробел.',
+    fields: [{ id: 'matrix', label: 'Матрица', value: '2 1 3\n1 0 2\n4 1 8', area: true, wide: true },
+      { id: 'op', label: 'Что найти', value: 'det', options: [['det', 'определитель'], ['inv', 'обратную матрицу'], ['rank', 'ранг'], ['eigen', 'собственные значения']] }],
+    samples: [{ matrix: '2 1 3\n1 0 2\n4 1 8', op: 'det' }, { matrix: '1 2\n3 4', op: 'inv' }, { matrix: '2 0\n1 3', op: 'eigen' }, { matrix: '1 2 3\n2 4 6', op: 'rank' }],
+  },
+  equation: {
+    name: 'Уравнения', title: 'Уравнения и системы', hint: 'Для системы пишите каждое уравнение с новой строки.',
+    fields: [{ id: 'f', label: 'Уравнение или система', value: 'x + 2y - z = 3\n2x - y + z = 1\nx + y + z = 6', area: true, wide: true }],
+    samples: [{ f: 'x + 2y - z = 3\n2x - y + z = 1\nx + y + z = 6' }, { f: 'x^3 - 6x^2 + 11x - 6 = 0' }, { f: 'sin(x) = 1/2' }, { f: 'x^2 + y^2 = 25\nx - y = 1' }],
+  },
+  ode: {
+    name: 'Дифуры', title: 'Дифференциальные уравнения', hint: "Производную пишите штрихом: y', y''. Неизвестная функция y(x).",
+    fields: [F.f('Уравнение', "y'' + 2y' + y = sin(x)"), { id: 'ics', label: "Начальные условия (необязательно)", value: '', wide: true }],
+    samples: [{ f: "y'' + 2y' + y = sin(x)", ics: '' }, { f: "y' = x*y", ics: 'y(0)=1' }, { f: "y' + y/x = x^2", ics: '' }, { f: "y'' + 4y = 0", ics: "y(0)=1, y'(0)=0" }],
+  },
+};
+
+const THEORY = {
+  derivative: ['Производная', 'Производная показывает скорость изменения функции в точке: \\(f\'(x) = \\lim_{h \\to 0} \\frac{f(x+h) - f(x)}{h}\\). Геометрически это угловой коэффициент касательной к графику.'],
+  diff_rules: ['Правила дифференцирования', 'Сумма: \\((u+v)\' = u\' + v\'\\). Произведение: \\((uv)\' = u\'v + uv\'\\). Частное: \\((u/v)\' = (u\'v - uv\')/v^2\\).'],
+  chain: ['Производная сложной функции', 'Если \\(y = f(u)\\) и \\(u = g(x)\\), то \\(y\' = f\'(u) \\cdot g\'(x)\\). Сначала дифференцируем внешнюю функцию, не трогая её аргумент, затем умножаем на производную аргумента.'],
+  log_diff: ['Логарифмическое дифференцирование', 'Для функции \\(y = u^v\\) логарифмируем обе части: \\(\\ln y = v \\ln u\\). Дифференцируя, получаем \\(y\' = u^v \\left(v\' \\ln u + v \\frac{u\'}{u}\\right)\\).'],
+  integral: ['Неопределённый интеграл', 'Первообразная функции \\(f\\) это такая функция \\(F\\), что \\(F\' = f\\). Все первообразные отличаются на постоянную, поэтому в ответе пишут \\(+ C\\). Любой ответ можно проверить дифференцированием.'],
+  substitution: ['Замена переменной', 'Если подынтегральное выражение содержит функцию и её производную, удобна замена: \\(\\int f(g(x))\\,g\'(x)\\,dx = \\int f(u)\\,du\\), где \\(u = g(x)\\).'],
+  parts: ['Интегрирование по частям', 'Формула \\(\\int u\\,dv = uv - \\int v\\,du\\) следует из правила производной произведения. За \\(u\\) обычно берут то, что упрощается при дифференцировании: многочлен, логарифм, обратную тригонометрическую функцию.'],
+  partial_fractions: ['Простейшие дроби', 'Правильную рациональную дробь можно разложить в сумму дробей вида \\(\\frac{A}{(x-a)^k}\\) и \\(\\frac{Bx+C}{(x^2+px+q)^k}\\). Каждая из них интегрируется стандартным приёмом.'],
+  newton: ['Формула Ньютона — Лейбница', 'Если \\(F\\) первообразная непрерывной на отрезке функции \\(f\\), то \\(\\int_a^b f(x)\\,dx = F(b) - F(a)\\). Для несобственного интеграла берут предел этой разности.'],
+  limit: ['Предел функции', 'Число \\(A\\) называют пределом \\(f\\) в точке \\(a\\), если значения \\(f(x)\\) становятся сколь угодно близки к \\(A\\) при \\(x\\), близких к \\(a\\). Значение в самой точке роли не играет. Двусторонний предел существует, только если совпадают пределы слева и справа.'],
+  lhopital: ['Правило Лопиталя', 'При неопределённости \\(\\frac{0}{0}\\) или \\(\\frac{\\infty}{\\infty}\\) предел отношения равен пределу отношения производных, если последний существует: \\(\\lim \\frac{f}{g} = \\lim \\frac{f\'}{g\'}\\).'],
+  series: ['Числовой ряд', 'Ряд сходится, если его частичные суммы имеют конечный предел. Необходимое условие: \\(a_n \\to 0\\). Оно не достаточно: гармонический ряд \\(\\sum 1/n\\) расходится, хотя \\(1/n \\to 0\\).'],
+  dalembert: ['Признак Даламбера', 'Пусть \\(q = \\lim_{n\\to\\infty} |a_{n+1}/a_n|\\). При \\(q < 1\\) ряд сходится, при \\(q > 1\\) расходится, при \\(q = 1\\) признак ответа не даёт и нужен другой способ.'],
+  taylor: ['Формула Тейлора', 'Гладкая функция вблизи точки \\(a\\) приближается многочленом \\(\\sum_{k=0}^{n} \\frac{f^{(k)}(a)}{k!}(x-a)^k\\). Остаток \\(o((x-a)^n)\\) показывает, что ошибка мала по сравнению с последней степенью.'],
+  log_def: ['Определение логарифма', '\\(\\log_a b\\) это показатель степени, в которую нужно возвести \\(a\\), чтобы получить \\(b\\): \\(a^{\\log_a b} = b\\). Основание положительно и не равно 1, число \\(b\\) положительно. Обозначения: \\(\\lg b = \\log_{10} b\\), \\(\\ln b = \\log_e b\\).'],
+  log_props: ['Свойства логарифмов', '\\(\\log_a(xy) = \\log_a x + \\log_a y\\), \\(\\log_a(x/y) = \\log_a x - \\log_a y\\), \\(\\log_a x^k = k \\log_a x\\). Переход к новому основанию: \\(\\log_a b = \\frac{\\log_c b}{\\log_c a}\\).'],
+  log_domain: ['Область допустимых значений', 'Преобразования могут расширять область определения, например \\(\\log_a x^2\\) определён и при отрицательных \\(x\\), в отличие от \\(2\\log_a x\\). Поэтому найденные корни всегда сверяют с условиями исходного уравнения.'],
+  log_sub: ['Замена в логарифмическом уравнении', 'Если неизвестная входит только через один логарифм, замена \\(t = \\log_a f(x)\\) сводит задачу к алгебраическому уравнению. Затем из каждого \\(t\\) находят \\(f(x) = a^t\\).'],
+  log_ineq: ['Логарифмические неравенства', 'При \\(a > 1\\) логарифм возрастает, и из \\(\\log_a f < \\log_a g\\) следует \\(f < g\\). При \\(0 < a < 1\\) логарифм убывает, и знак меняется на противоположный. Положительность \\(f\\) и \\(g\\) проверяют отдельно.'],
+  matrix: ['Матрицы', 'Квадратная матрица обратима тогда и только тогда, когда её определитель не равен нулю. Ранг это наибольшее число линейно независимых строк, он совпадает с числом ненулевых строк ступенчатого вида.'],
+  gauss: ['Метод Гаусса', 'Элементарные преобразования строк приводят матрицу к ступенчатому виду и не меняют множество решений системы. Прибавление к строке кратного другой строки сохраняет определитель, перестановка строк меняет его знак.'],
+  eigen: ['Собственные значения', 'Число \\(\\lambda\\) называют собственным значением матрицы \\(A\\), если существует ненулевой вектор \\(v\\) с \\(Av = \\lambda v\\). Такие \\(\\lambda\\) это корни уравнения \\(\\det(A - \\lambda E) = 0\\).'],
+  equation: ['Решение уравнений', 'Уравнение приводят к виду \\(f(x) = 0\\) и ищут корни: раскладывают на множители, понижают степень или применяют формулы. Проверка подстановкой отсекает посторонние корни.'],
+  quadratic: ['Квадратное уравнение', 'Корни уравнения \\(ax^2 + bx + c = 0\\) равны \\(x = \\frac{-b \\pm \\sqrt{D}}{2a}\\), где \\(D = b^2 - 4ac\\). При \\(D < 0\\) действительных корней нет.'],
+  ode: ['Дифференциальные уравнения', 'Дифференциальное уравнение связывает неизвестную функцию и её производные. Общее решение уравнения порядка \\(n\\) содержит \\(n\\) произвольных постоянных, начальные условия выделяют из них одно решение.'],
+  separable: ['Разделяющиеся переменные', 'Уравнение \\(y\' = f(x)\\,g(y)\\) записывают как \\(\\frac{dy}{g(y)} = f(x)\\,dx\\) и интегрируют обе части.'],
+  first_linear: ['Линейное уравнение первого порядка', 'Для \\(y\' + p(x)y = q(x)\\) умножаем обе части на \\(\\mu = e^{\\int p\\,dx}\\). Левая часть становится производной \\((\\mu y)\'\\), и остаётся один интеграл.'],
+  const_coeff: ['Постоянные коэффициенты', 'Подстановка \\(y = e^{kx}\\) даёт характеристическое уравнение. Действительный корень \\(k\\) даёт \\(e^{kx}\\), кратный корень добавляет множители \\(x\\), пара \\(\\alpha \\pm i\\beta\\) даёт \\(e^{\\alpha x}\\cos\\beta x\\) и \\(e^{\\alpha x}\\sin\\beta x\\).'],
+};
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let topic = 'integral', worker, ready = false, seq = 0, pending = null;
+
+function typeset(el) {
+  if (window.MathJax && MathJax.typesetPromise) {
+    MathJax.typesetClear([el]);
+    return MathJax.startup.promise.then(() => MathJax.typesetPromise([el])).catch(() => {});
+  }
+}
+
+function startWorker() {
+  ready = false;
+  worker = new Worker('worker.js');
+  worker.onmessage = ({ data }) => {
+    if (data.type === 'ready') {
+      ready = true;
+      setStatus('');
+      $('go').disabled = false;
+      if (window.onEngineReady) onEngineReady();
+    } else if (data.type === 'fatal') {
+      setStatus('Движок не запустился. Обновите страницу.', false);
+    } else if (data.type === 'result' && pending && data.id === pending.id) {
+      clearTimeout(pending.timer);
+      const p = pending;
+      pending = null;
+      p.resolve(data.result);
+    }
+  };
+  worker.onerror = () => setStatus('Движок не запустился. Обновите страницу.', false);
+}
+
+function setStatus(text, busy) {
+  $('status').innerHTML = text ? esc(text) + (busy ? '<div class="bar"><i></i></div>' : '') : '';
+}
+
+function solve(task) {
+  return new Promise((resolve) => {
+    const id = ++seq;
+    const timer = setTimeout(() => {
+      worker.terminate();
+      pending = null;
+      $('go').disabled = true;
+      setStatus('Перезапускаю движок…', true);
+      startWorker();
+      resolve({ ok: false, error: 'Задача считается слишком долго, и вычисление остановлено. Попробуйте упростить запись.' });
+    }, LIMIT_MS);
+    pending = { id, resolve, timer };
+    worker.postMessage({ id, task });
+  });
+}
+window.solveTask = solve;
+
+function renderTopics() {
+  $('topics').innerHTML = Object.entries(TOPICS).map(([k, t]) =>
+    `<button type="button" data-t="${k}" aria-pressed="${k === topic}">${t.name}</button>`).join('');
+}
+
+function renderForm(values) {
+  const t = TOPICS[topic];
+  $('title').textContent = t.title;
+  $('hint').textContent = t.hint;
+  $('fields').innerHTML = t.fields.map((f) => {
+    const v = esc(values && f.id in values ? values[f.id] : f.value);
+    const id = 'in-' + f.id;
+    let control;
+    if (f.options) control = `<select id="${id}">${f.options.map(([o, n]) => `<option value="${esc(o)}"${o === (values && values[f.id] || f.value) ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
+    else if (f.area) control = `<textarea id="${id}" spellcheck="false">${v}</textarea>`;
+    else control = `<input id="${id}" value="${v}" spellcheck="false" autocapitalize="off">`;
+    return `<div class="field${f.wide ? ' wide' : ''}"><label for="${id}">${esc(f.label)}</label>${control}</div>`;
+  }).join('');
+  $('samples').innerHTML = 'Примеры: ' + t.samples.map((s, i) =>
+    `<button type="button" data-s="${i}">${esc(Object.values(s)[0].split('\n')[0])}</button>`).join('');
+}
+
+function collect() {
+  const task = { topic };
+  for (const f of TOPICS[topic].fields) task[f.id] = $('in-' + f.id).value;
+  return task;
+}
+
+function renderTheory(tags) {
+  const keys = tags && tags.length ? tags : DEFAULT_TAGS[topic];
+  $('theory').innerHTML = keys.filter((k) => THEORY[k]).map((k) =>
+    `<article><h3>${esc(THEORY[k][0])}</h3><p>${THEORY[k][1]}</p></article>`).join('');
+  typeset($('theory'));
+}
+const DEFAULT_TAGS = {
+  derivative: ['derivative', 'diff_rules', 'chain'], integral: ['integral', 'parts', 'substitution', 'newton'],
+  limit: ['limit', 'lhopital'], sum: ['series', 'dalembert'], taylor: ['taylor'],
+  logs: ['log_def', 'log_props', 'log_domain'], matrix: ['matrix', 'gauss', 'eigen'], equation: ['equation', 'gauss'], ode: ['ode', 'const_coeff'],
+};
+
+function drawPlot(series) {
+  if (!series || !series.length) { $('plotBox').hidden = true; return; }
+  const W = 640, H = 300, P = 30;
+  const ys = series.flatMap((s) => s.points.map((p) => p[1]).filter((v) => v !== null)).sort((a, b) => a - b);
+  let lo = ys[Math.floor(ys.length * .04)], hi = ys[Math.floor(ys.length * .96)];
+  if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * .15; lo -= pad; hi += pad;
+  const X = (x) => P + (x + 6) / 12 * (W - 2 * P), Y = (y) => H - P - (y - lo) / (hi - lo) * (H - 2 * P);
+  const nice = (hi - lo) / 5, step = Math.pow(10, Math.floor(Math.log10(nice))) * ([1, 2, 5, 10].find((m) => m * Math.pow(10, Math.floor(Math.log10(nice))) >= nice));
+  let grid = '';
+  for (let x = -6; x <= 6; x += 2) grid += `<line x1="${X(x)}" x2="${X(x)}" y1="${P / 2}" y2="${H - P}" stroke="var(--grid)"/><text x="${X(x)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">${x}</text>`;
+  for (let y = Math.ceil(lo / step) * step; y <= hi; y += step) grid += `<line x1="${P}" x2="${W - P}" y1="${Y(y)}" y2="${Y(y)}" stroke="var(--grid)"/><text x="${P - 5}" y="${Y(y) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${+y.toFixed(4)}</text>`;
+  if (lo < 0 && hi > 0) grid += `<line x1="${P}" x2="${W - P}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--muted)"/>`;
+  grid += `<line x1="${X(0)}" x2="${X(0)}" y1="${P / 2}" y2="${H - P}" stroke="var(--muted)"/>`;
+  const paths = series.slice(0, 2).map((s, i) => {
+    let d = '', pen = false, prev = null;
+    for (const [x, y] of s.points) {
+      const out = y === null || y < lo - (hi - lo) || y > hi + (hi - lo) || (prev !== null && Math.abs(y - prev) > (hi - lo));
+      if (out) pen = false;
+      else { d += (pen ? 'L' : 'M') + X(x).toFixed(1) + ' ' + Y(y).toFixed(1); pen = true; }
+      prev = y;
+    }
+    return `<path d="${d}" fill="none" stroke="var(--${i ? 'ink' : 'blue'})" stroke-width="2"/>`;
+  }).join('');
+  const id = 'clip' + seq;
+  $('plot').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="График"><defs><clipPath id="${id}"><rect x="${P}" y="${P / 2}" width="${W - 2 * P}" height="${H - 1.5 * P}"/></clipPath></defs>${grid}<g clip-path="url(#${id})">${paths}</g></svg>
+    <div class="legend">${series.slice(0, 2).map((s, i) => `<b class="${i ? 'b' : 'a'}">${esc(s.name)}</b>`).join('')}</div>`;
+  $('plotBox').hidden = false;
+}
+
+function renderResult(r) {
+  const box = $('result');
+  if (!r.ok) {
+    box.innerHTML = `<div class="error">${esc(r.error)}</div>`;
+    $('plotBox').hidden = true;
+    return;
+  }
+  const check = r.check ? `<p class="check ${r.check.ok ? 'ok' : 'bad'}">${r.check.ok ? '✓ Проверено' : '✗ Проверка не прошла'}<span style="font:14px var(--body);color:var(--muted);margin-left:8px">${esc(r.check.ok ? r.check.text : 'Ответ может быть неточным, проверьте его вручную.')}</span></p>` : '';
+  const note = r.note ? `<p class="note">${esc(r.note)}</p>` : '';
+  const steps = r.steps.map((s) => `<li class="d${Math.min(s.depth, 3)}"><div>${s.text}</div>${s.math ? `<div class="sm mathwrap">\\(\\displaystyle ${esc(s.math)}\\)</div>` : ''}</li>`).join('');
+  const lines = r.answer.split(' \\\\ ').map((l) => `<div class="mathwrap">\\(\\displaystyle ${esc(l)}\\)</div>`).join('');
+  box.innerHTML = `<section><h2>Ответ</h2><div class="answer">${lines}${check}${note}</div></section>` +
+    (steps ? `<section><h2>Решение по шагам</h2><ol class="steps">${steps}</ol></section>` : '');
+  typeset(box);
+  drawPlot(r.plot);
+  renderTheory(r.tags);
+}
+
+function loadHistory() { try { return JSON.parse(localStorage.getItem('kletka') || '[]'); } catch { return []; } }
+function pushHistory(task) {
+  const label = task.f ? task.f.replace(/\n/g, ' ; ') : task.matrix.replace(/\n/g, ' ; ');
+  const list = [{ label, task }, ...loadHistory().filter((h) => JSON.stringify(h.task) !== JSON.stringify(task))].slice(0, 8);
+  try { localStorage.setItem('kletka', JSON.stringify(list)); } catch {}
+  renderHistory(list);
+}
+function renderHistory(list) {
+  $('history').hidden = !list.length;
+  $('historyList').innerHTML = list.map((h, i) => `<button type="button" data-h="${i}" title="${esc(h.label)}">${esc(h.label)}</button>`).join('');
+}
+
+const OCR_TOPICS = Object.keys(TOPICS).join(', ');
+const OCR_PROMPT = `На фото математическая задача. Верни только JSON вида {"topic": "...", "f": "..."}.
+topic выбери из списка: ${OCR_TOPICS}. В f запиши выражение в текстовой записи: x^2*sin(x), sqrt(x), log_2(x), lg(x), ln(x), oo для бесконечности, y' и y'' для производных.
+Для integral добавь поля a и b, если есть пределы. Для limit добавь point. Для sum добавь a и b. Для matrix вместо f верни matrix со строками через \\n и op из det, inv, rank, eigen. Для equation и системы пиши уравнения через \\n.`;
+
+function fileToCanvas(file) {
+  return createImageBitmap(file).then((bmp) => {
+    const scale = Math.min(3, 1800 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * scale);
+    c.height = Math.round(bmp.height * scale);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    return c;
+  });
+}
+
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Не удалось загрузить распознавание. Проверьте интернет.'));
+    document.head.append(s);
+  });
+}
+
+function cleanOcr(text) {
+  return text.split('\n').map((l) => l.trim()).filter(Boolean).join('\n')
+    .replace(/[₀-₉]/g, (c) => c.charCodeAt(0) - 0x2080).replace(/\blog\s+(\d+)\s*\(/g, 'log_$1(').replace(/[—–]/g, '-').replace(/[×·]/g, '*').replace(/\blo9/g, 'log').replace(/\|/g, 'l');
+}
+
+async function readLocally(canvas) {
+  await loadTesseract();
+  const ctx = canvas.getContext('2d'), img = ctx.getImageData(0, 0, canvas.width, canvas.height), d = img.data;
+  let sum = 0;
+  for (let i = 0; i < d.length; i += 4) sum += d[i] = d[i + 1] = d[i + 2] = .3 * d[i] + .59 * d[i + 1] + .11 * d[i + 2];
+  const level = sum / (d.length / 4) * .8;
+  for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = d[i] < level ? 0 : 255;
+  ctx.putImageData(img, 0, 0);
+  const { data } = await Tesseract.recognize(canvas, 'eng');
+  return { topic, f: cleanOcr(data.text) };
+}
+
+const PROVIDERS = [
+  { id: 'gemini', name: 'Gemini', ask: askGemini },
+  { id: 'groq', name: 'Groq', ask: (c, k) => askChat('https://api.groq.com/openai/v1/chat/completions', ['qwen/qwen3.8-27b', 'meta-models/muse-spark-open'], c, k) },
+  { id: 'openrouter', name: 'OpenRouter', ask: (c, k) => askChat('https://openrouter.ai/api/v1/chat/completions', ['openrouter/free'], c, k) },
+];
+
+function failReason(status) {
+  if (status === 429) return 'закончился лимит';
+  if (status === 401 || status === 403) return 'ключ не подошёл';
+  return status ? `ошибка ${status}` : 'нет связи';
+}
+
+function parseRead(text) {
+  return JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
+}
+
+// Перебирает модели одной службы. Ошибка наружу значит, что пора переходить к следующей службе.
+async function tryModels(models, request, extract) {
+  let reason = 'нет связи';
+  for (const model of models) {
+    let res;
+    try { res = await fetch(...request(model)); } catch { reason = failReason(0); continue; }
+    if (!res.ok) {
+      reason = failReason(res.status);
+      if (res.status === 401 || res.status === 403) break;
+      continue;
+    }
+    try { return parseRead(extract(await res.json())); } catch { reason = 'непонятный ответ'; }
+  }
+  throw new Error(reason);
+}
+
+async function geminiModels(key) {
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': key } });
+    const { models } = await res.json();
+    return models.filter((m) => /flash/.test(m.name) && !/lite|image|tts|live/.test(m.name) && m.supportedGenerationMethods.includes('generateContent')).map((m) => m.name);
+  } catch { return []; }
+}
+
+async function askGemini(canvas, key) {
+  const models = [...new Set(['models/gemini-2.5-flash', ...(await geminiModels(key))])];
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: OCR_PROMPT }, { inline_data: { mime_type: 'image/jpeg', data: canvas.toDataURL('image/jpeg', .9).split(',')[1] } }] }],
+    generationConfig: { responseMimeType: 'application/json' },
+  });
+  return tryModels(models, (model) => [`https://generativelanguage.googleapis.com/v1beta/${model}:generateContent`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body,
+  }], (data) => data.candidates[0].content.parts[0].text);
+}
+
+function askChat(url, models, canvas, key) {
+  const image = canvas.toDataURL('image/jpeg', .9);
+  return tryModels(models, (model) => [url, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+    body: JSON.stringify({ model, messages: [{ role: 'user', content: [{ type: 'text', text: OCR_PROMPT }, { type: 'image_url', image_url: { url: image } }] }] }),
+  }], (data) => data.choices[0].message.content);
+}
+
+async function recognize(canvas) {
+  const failed = [];
+  for (const p of PROVIDERS) {
+    const key = $('key-' + p.id).value.trim();
+    if (!key) continue;
+    setStatus(`Распознаю фото через ${p.name}…`, true);
+    try {
+      return { read: await p.ask(canvas, key), via: p.name, failed };
+    } catch (e) {
+      failed.push(`${p.name}: ${e.message}`);
+    }
+  }
+  setStatus('Распознаю фото на устройстве…', true);
+  return { read: await readLocally(canvas), via: 'распознавание на устройстве', failed };
+}
+
+function applyOcr(read) {
+  const k = TOPICS[read.topic] ? read.topic : topic;
+  const fields = TOPICS[k].fields, values = Object.fromEntries(fields.map((f) => [f.id, f.value]));
+  for (const f of fields) if (read[f.id] !== undefined && read[f.id] !== null) values[f.id] = String(read[f.id]);
+  setTopic(k, values);
+}
+
+async function scan(file) {
+  if (!file) return;
+  setStatus('Распознаю фото…', true);
+  try {
+    const { read, via, failed } = await recognize(await fileToCanvas(file));
+    if (!read.f && !read.matrix) throw new Error('На фото не нашлось текста. Сделайте снимок ближе и при хорошем свете.');
+    applyOcr(read);
+    const note = failed.length ? `Сработало: ${via}. Пропущено — ${failed.join('; ')}. ` : '';
+    setStatus(note + 'Проверьте распознанную запись и нажмите «Решить».');
+  } catch (e) {
+    setStatus(e.message);
+  }
+}
+window.scanFile = scan;
+
+async function submit() {
+  if (!ready || pending) return;
+  const task = collect();
+  $('go').disabled = true;
+  setStatus('Считаю…', true);
+  const r = await solve(task);
+  if (ready) { $('go').disabled = false; setStatus(''); }
+  renderResult(r);
+  if (r.ok) pushHistory(task);
+}
+
+function setTopic(k, values) {
+  topic = k;
+  renderTopics();
+  renderForm(values);
+  $('result').innerHTML = '';
+  $('plotBox').hidden = true;
+  renderTheory();
+}
+
+$('topics').addEventListener('click', (e) => { const k = e.target.dataset.t; if (k) setTopic(k); });
+$('samples').addEventListener('click', (e) => {
+  const i = e.target.dataset.s;
+  if (i === undefined) return;
+  const t = TOPICS[topic], values = Object.fromEntries(t.fields.map((f) => [f.id, f.value]));
+  renderForm({ ...values, ...t.samples[i] });
+  submit();
+});
+$('historyList').addEventListener('click', (e) => {
+  const i = e.target.dataset.h;
+  if (i === undefined) return;
+  const { task } = loadHistory()[i];
+  setTopic(task.topic, task);
+  submit();
+});
+$('photoInput').addEventListener('change', (e) => { scan(e.target.files[0]); e.target.value = ''; });
+$('keyFields').innerHTML = PROVIDERS.map((p, i) => `<div class="field"><label for="key-${p.id}">${i + 1}. Ключ ${p.name}</label><input id="key-${p.id}" type="password" autocomplete="off" spellcheck="false"></div>`).join('');
+for (const p of PROVIDERS) {
+  const name = p.id === 'gemini' ? 'kletka-key' : 'kletka-key-' + p.id, el = $('key-' + p.id);
+  try { el.value = localStorage.getItem(name) || ''; } catch {}
+  el.addEventListener('change', () => { try { localStorage.setItem(name, el.value.trim()); } catch {} });
+}
+$('form').addEventListener('submit', (e) => { e.preventDefault(); submit(); });
+
+window.onEngineReady = () => { window.onEngineReady = null; submit(); };
+setTopic('integral');
+renderHistory(loadHistory());
+$('go').disabled = true;
+setStatus('Загружаю вычислительный движок. В первый раз это занимает 10–20 секунд.', true);
+startWorker();
+
+// Внутри Telegram: на весь экран, цвета шапки в тон сайту, лёгкая отдача на нажатия.
+const tg = window.Telegram && Telegram.WebApp;
+if (tg && tg.initData) {
+  tg.ready();
+  tg.expand();
+  tg.setHeaderColor('#292929');
+  tg.setBackgroundColor('#292929');
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('button, .photo') && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+  });
+}
+</script>
