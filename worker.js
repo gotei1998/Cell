@@ -3,6 +3,10 @@ const base = new URL('.', self.location.href).href;
 importScripts(base + 'runtime/pyodide.js');
 
 async function boot() {
+  // Если здесь обрыв, Pyodide завис бы молча, поэтому сеть проверяем заранее.
+  const probe = await fetch(base + 'runtime/python_stdlib.zip');
+  if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
+  await probe.arrayBuffer();
   const py = await loadPyodide({ indexURL: base + 'runtime/' });
   for (const name of ['mpmath', 'sympy']) {
     const buf = await (await fetch(`${base}runtime/${name}.zip`)).arrayBuffer();
