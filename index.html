@@ -371,17 +371,19 @@ const DEFAULT_TAGS = {
 function drawPlot(series) {
   if (!series || !series.length) { $('plotBox').hidden = true; return; }
   const W = 640, H = 300, P = 30;
+  const xs = series[0].points, x0 = xs[0][0], x1 = xs[xs.length - 1][0];
+  const tick = (span) => { const p = Math.pow(10, Math.floor(Math.log10(span))); return p * [1, 2, 5, 10].find((m) => m * p >= span); };
   const ys = series.flatMap((s) => s.points.map((p) => p[1]).filter((v) => v !== null)).sort((a, b) => a - b);
   let lo = ys[Math.floor(ys.length * .04)], hi = ys[Math.floor(ys.length * .96)];
   if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
   const pad = (hi - lo) * .15; lo -= pad; hi += pad;
-  const X = (x) => P + (x + 6) / 12 * (W - 2 * P), Y = (y) => H - P - (y - lo) / (hi - lo) * (H - 2 * P);
-  const nice = (hi - lo) / 5, step = Math.pow(10, Math.floor(Math.log10(nice))) * ([1, 2, 5, 10].find((m) => m * Math.pow(10, Math.floor(Math.log10(nice))) >= nice));
+  const X = (x) => P + (x - x0) / (x1 - x0) * (W - 2 * P), Y = (y) => H - P - (y - lo) / (hi - lo) * (H - 2 * P);
+  const step = tick((hi - lo) / 5), xstep = tick((x1 - x0) / 6);
   let grid = '';
-  for (let x = -6; x <= 6; x += 2) grid += `<line x1="${X(x)}" x2="${X(x)}" y1="${P / 2}" y2="${H - P}" stroke="var(--grid)"/><text x="${X(x)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">${x}</text>`;
+  for (let x = Math.ceil(x0 / xstep) * xstep; x <= x1 + 1e-9; x += xstep) grid += `<line x1="${X(x)}" x2="${X(x)}" y1="${P / 2}" y2="${H - P}" stroke="var(--grid)"/><text x="${X(x)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">${+x.toFixed(4)}</text>`;
   for (let y = Math.ceil(lo / step) * step; y <= hi; y += step) grid += `<line x1="${P}" x2="${W - P}" y1="${Y(y)}" y2="${Y(y)}" stroke="var(--grid)"/><text x="${P - 5}" y="${Y(y) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${+y.toFixed(4)}</text>`;
   if (lo < 0 && hi > 0) grid += `<line x1="${P}" x2="${W - P}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--muted)"/>`;
-  grid += `<line x1="${X(0)}" x2="${X(0)}" y1="${P / 2}" y2="${H - P}" stroke="var(--muted)"/>`;
+  if (x0 < 0 && x1 > 0) grid += `<line x1="${X(0)}" x2="${X(0)}" y1="${P / 2}" y2="${H - P}" stroke="var(--muted)"/>`;
   const paths = series.slice(0, 2).map((s, i) => {
     let d = '', pen = false, prev = null;
     for (const [x, y] of s.points) {

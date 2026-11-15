@@ -2,6 +2,7 @@ import json
 import math
 import re
 
+import mpmath as mp
 import sympy as sp
 from sympy.integrals.manualintegrate import integral_steps
 from sympy.parsing.sympy_parser import (
@@ -16,9 +17,27 @@ FUNCS = "asin|acos|atan|acot|sinh|cosh|tanh|coth|sin|cos|tan|cot|log|exp|sqrt"
 WORDS = [
     ("arcsin", "asin"), ("arccos", "acos"), ("arctg", "atan"), ("arctan", "atan"),
     ("arcctg", "acot"), ("arccot", "acot"), ("ctg", "cot"), ("cotg", "cot"), ("tg", "tan"),
-    ("cth", "coth"), ("sh", "sinh"), ("ch", "cosh"), ("th", "tanh"), ("ln", "log"),
-    ("inf", "oo"), ("infinity", "oo"), ("бесконечность", "oo"),
+    ("cosec", "csc"), ("cth", "coth"), ("sh", "sinh"), ("ch", "cosh"), ("th", "tanh"), ("ln", "log"),
+    ("inf", "oo"), ("infinity", "oo"),
 ]
+BARE = (r"(?:(?:\d+(?:\.\d+)?)? *(?:pi|[a-z])(?![A-Za-z_(])(?:\^(?:\d+|[a-z])(?![A-Za-z_(.\d]))?"
+        r"|\d+(?:\.\d+)?(?![\d.^]))")
+ALLOWED = re.compile(r"[A-Za-z0-9_\s.+\-*/^(),α-ωΑ-Ω]")
+
+
+def safe_globals():
+    """Имена, доступные при разборе записи: только SymPy, без встроенных функций Python."""
+    g = {}
+    exec("from sympy import *", g)
+    g.update(__builtins__={}, max=sp.Max, min=sp.Min, abs=sp.Abs)
+    for name in ("sympify", "S", "parse_expr", "lambdify", "srepr", "preview", "pprint", "init_printing",
+                 "init_session", "source", "test", "doctest", "plot", "textplot", "pager_print", "print_latex",
+                 "evaluate", "var", "symbols"):
+        g.pop(name, None)
+    return g
+
+
+SAFE_GLOBALS = safe_globals()
 
 
 class UserError(Exception):
@@ -29,13 +48,59 @@ class Unsolved(Exception):
     pass
 
 
+def call_before(s, name, mark="!"):
+    """Заменяет постфиксный знак на вызов функции: «n!» → «factorial(n)», «(n+1)!» → «factorial((n+1))»."""
+    while mark in s:
+        i = s.index(mark)
+        j = i
+        while j and s[j - 1] == " ":
+            j -= 1
+        k = j
+        if j and s[j - 1] == ")":
+            depth = 0
+            while k:
+                k -= 1
+                depth += (s[k] == ")") - (s[k] == "(")
+                if not depth:
+                    break
+            else:
+                return s
+            while k and (s[k - 1].isalnum() or s[k - 1] == "_"):
+                k -= 1
+        else:
+            while k and (s[k - 1].isalnum() or s[k - 1] in "._"):
+                k -= 1
+        if k == j:
+            return s
+        s = f"{s[:k]}{name}({s[k:j]}){s[i + 1:]}"
+    return s
+
+
+def bars(s):
+    """Заменяет модуль в прямых чертах на Abs(...). Черта открывает модуль, если перед ней нет операнда."""
+    out, opened = [], 0
+    for ch in s:
+        if ch != "|":
+            out.append(ch)
+            continue
+        prev = "".join(out).rstrip()[-1:]
+        if opened and (prev.isalnum() or prev in ")_."):
+            out.append(")")
+            opened -= 1
+        else:
+            out.append("*Abs(" if prev.isalnum() or prev in ")_." and prev else "Abs(")
+            opened += 1
+    return s if opened else "".join(out)
+
+
 def normalize(s):
-    s = s.strip()
+    s = re.sub(r"бесконечност[ьи]", "oo", s.strip(), flags=re.I)
     for a, b in [("х", "x"), ("Х", "x"), ("у", "y"), ("е", "e"), ("а", "a"), ("с", "c"),
                  ("π", "pi"), ("∞", "oo"), ("−", "-"), ("–", "-"), ("·", "*"), ("×", "*"),
                  ("÷", "/"), ("√", "sqrt"), ("²", "^2"), ("³", "^3"), ("’", "'")]:
         s = s.replace(a, b)
     s = re.sub(r"(\d),(\d)", r"\1.\2", s)
+    s = call_before(bars(s), "factorial")
     s = re.sub(r"\b(lg|ln|log)\^(\d+)\s*\(([^()]*)\)", r"(\1(\3))^\2", s)
     s = re.sub(r"log_?\{([^{}]+)\}\s*\(", r"LOGBASE((\1),", s)
     s = re.sub(r"log_\(([^()]+)\)\s*\(", r"LOGBASE((\1),", s)
@@ -44,7 +109,9 @@ def normalize(s):
     for a, b in WORDS:
         s = re.sub(rf"(?<![A-Za-z_]){a}(?![A-Za-z_])", b, s)
         s = re.sub(rf"(?<![A-Za-z_]){a}(?=[xyztnk\d])", b + " ", s)
-    return re.sub(rf"(?<![A-Za-z_])({FUNCS})(?=[a-z0-9])(?!h)", r"\1 ", s)
+    s = re.sub(rf"(?<![A-Za-z_])({FUNCS})(?=[a-z0-9])(?!h)", r"\1 ", s)
+    # «sin x cos x» читается как sin(x)·cos(x): аргумент без скобок это одно число или одна буква с множителем.
+    return re.sub(rf"(?<![A-Za-z_])({FUNCS}|lg|sec|csc)(\^\d+)? +({BARE})", r"\1(\3)\2", s)
 
 
 def parse(s, extra=None, what="выражение"):
@@ -53,8 +120,20 @@ def parse(s, extra=None, what="выражение"):
     local = {"e": sp.E, "pi": sp.pi, "E": sp.E, "oo": sp.oo,
              "lg": lambda v: sp.log(v, 10), "I": sp.I, "LOGBASE": lambda a, v: sp.log(v, a)}
     local.update(extra or {})
+    text = normalize(s)
+    word = re.search(r"[А-Яа-яЁё]+", text)
+    if word:
+        raise UserError(f"В записи «{s.strip()}» остались русские буквы («{word.group()}»). Функции пишите "
+                        "латиницей: sin, cos, tg, ln, sqrt, а бесконечность как oo.")
+    bad = ALLOWED.sub("", text)
+    if bad:
+        raise UserError(f"В записи «{s.strip()}» есть недопустимый символ «{bad[0]}». Используйте цифры, "
+                        "латинские буквы, скобки и знаки + - * / ^.")
+    if "__" in text or re.search(r"\.\s*[A-Za-z_]", text):
+        raise UserError(f"Не удалось разобрать запись «{s.strip()}». Проверьте скобки и знаки "
+                        "умножения, например: x^2*sin(x).")
     try:
-        expr = parse_expr(normalize(s), local_dict=local, transformations=TRANSFORMS)
+        expr = parse_expr(text, local_dict=local, global_dict=dict(SAFE_GLOBALS), transformations=TRANSFORMS)
     except Exception:
         raise UserError(f"Не удалось разобрать запись «{s.strip()}». Проверьте скобки и знаки "
                         "умножения, например: x^2*sin(x).")
@@ -70,6 +149,24 @@ def symbol(s, default="x"):
     return sp.Symbol(s)
 
 
+def integer(value, default, lo, hi, what):
+    try:
+        n = int(str(value).strip() or default) if value is not None else default
+    except ValueError:
+        n = None
+    if n is None or not lo <= n <= hi:
+        raise UserError(f"{what}: нужно целое число от {lo} до {hi}.")
+    return n
+
+
+def real_var(f, x):
+    """Модуль дифференцируется и интегрируется только по действительной переменной."""
+    if not f.has(sp.Abs):
+        return f, x
+    r = sp.Symbol(x.name, real=True)
+    return f.subs(x, r), r
+
+
 def L(e):
     t = sp.latex(e, ln_notation=True, inv_trig_style="full")
     for a, b in [(r"\tan", r"\operatorname{tg}"), (r"\cot", r"\operatorname{ctg}"),
@@ -78,7 +175,7 @@ def L(e):
                  (r"\sinh", r"\operatorname{sh}"), (r"\cosh", r"\operatorname{ch}"),
                  (r"\tanh", r"\operatorname{th}"), (r"\coth", r"\operatorname{cth}")]:
         t = re.sub(re.escape(a) + r"(?![a-zA-Z])", lambda _: b, t)
-    return t
+    return t.replace(r"\text{for}\:", r"\text{при}\:").replace(r"\text{otherwise}", r"\text{иначе}")
 
 
 def M(e):
@@ -105,26 +202,41 @@ def is_true(e):
         return False
 
 
-def sample(f, x):
+def window(*marks):
+    """Отрезок оси x для графика: стандартный [-6, 6] или окрестность точек задачи, если они вне его."""
+    vals = []
+    for m in marks:
+        try:
+            if m.is_real and m.is_finite:
+                vals.append(float(m))
+        except (TypeError, ValueError):
+            pass
+    if not vals or (min(vals) >= -6 and max(vals) <= 6):
+        return -6.0, 6.0
+    pad = max((max(vals) - min(vals)) * 0.25, 3.0)
+    return min(vals) - pad, max(vals) + pad
+
+
+def sample(f, x, span):
     fn = sp.lambdify(x, f, modules="math")
     pts = []
     for i in range(241):
-        v = -6 + i * 0.05
+        v = span[0] + i * (span[1] - span[0]) / 240
         try:
             y = fn(v)
             y = float(y) if not isinstance(y, complex) and math.isfinite(y) else None
         except Exception:
             y = None
-        pts.append([round(v, 3), y])
+        pts.append([round(v, 4), y])
     return pts if sum(1 for p in pts if p[1] is not None) > 10 else None
 
 
-def plot(x, *series):
+def plot(x, *series, span=(-6.0, 6.0)):
     out = []
     for name, f in series:
         if isinstance(f, sp.Expr) and f.free_symbols <= {x}:
             try:
-                pts = sample(f, x)
+                pts = sample(f, x, span)
             except Exception:
                 pts = None
             if pts:
@@ -144,6 +256,7 @@ TABLE = {
     sp.atan: r"(\operatorname{arctg} u)' = \frac{1}{1+u^2}",
     sp.sinh: r"(\operatorname{sh} u)' = \operatorname{ch} u",
     sp.cosh: r"(\operatorname{ch} u)' = \operatorname{sh} u",
+    sp.Abs: r"|u|' = \operatorname{sign} u,\ u \neq 0",
 }
 
 
@@ -219,16 +332,15 @@ def diff_walk(w, f, x, d=0):
 
 def solve_derivative(t):
     x = symbol(t.get("var"))
-    f = parse(t.get("f"), what="функция")
-    n = int(t.get("order") or 1)
-    if not 1 <= n <= 10:
-        raise UserError("Порядок производной должен быть от 1 до 10.")
+    f, x = real_var(parse(t.get("f"), what="функция"), x)
+    n = integer(t.get("order"), 1, 1, 10, "Порядок производной")
     w = Work()
     w.tag("derivative")
     diff_walk(w, f, x)
-    cur = sp.diff(f, x)
+    smooth = lambda e: e.replace(lambda v: isinstance(v, sp.DiracDelta), lambda v: sp.Integer(0))
+    cur = smooth(sp.diff(f, x))
     for k in range(2, n + 1):
-        nxt = sp.diff(cur, x)
+        nxt = smooth(sp.diff(cur, x))
         w.add(f"Дифференцируем ещё раз и получаем производную порядка {k}.",
               rf"y^{{({k})}} = {L(sp.simplify(nxt))}")
         cur = nxt
@@ -237,21 +349,48 @@ def solve_derivative(t):
         ans = cur
     prime = "'" * n if n < 4 else f"^{{({n})}}"
     head = rf"\left({L(f)}\right){prime}"
-    return {
+    res = {
         "problem": head + " = \\;?", "answer": rf"{head} = {L(ans)}", "work": w,
-        "check": check_numeric(sp.Derivative(f, (x, n)).doit() - ans, x,
-                               "Ответ сверен с независимым вычислением в нескольких точках."),
+        "check": check_derivative(f, ans, x, n),
         "plot": plot(x, ("f", f), ("производная", ans)),
     }
+    if f.has(sp.Abs):
+        res["note"] = "В точках, где выражение под модулем равно нулю, производная может не существовать."
+    return res
+
+
+POINTS = [sp.Rational(7, 10), sp.Rational(13, 10), sp.Rational(23, 10), sp.Rational(-9, 10), sp.Rational(-17, 10)]
 
 
 def check_numeric(diff, x, text):
-    pts = [sp.Rational(7, 10), sp.Rational(13, 10), sp.Rational(23, 10)]
+    """Сверяет, что выражение равно нулю в пробных точках. Без единой посчитанной точки проверки нет."""
     try:
-        vals = [abs(sp.N(diff.subs(x, p))) for p in pts]
-        return {"ok": all(v < 1e-9 for v in vals if v.is_finite), "text": text}
+        vals = [abs(sp.N(diff.subs(x, p))) for p in POINTS]
+        vals = [v for v in vals if v.is_finite]
+        return {"ok": all(v < 1e-9 for v in vals), "text": text} if vals else None
     except Exception:
         return None
+
+
+def check_derivative(f, ans, x, n):
+    """Независимая проверка: ответ сравнивается с численной производной по разностной схеме."""
+    others = sorted((f.free_symbols | ans.free_symbols) - {x}, key=lambda v: v.name)
+    fill = {v: sp.Rational(11 + 6 * i, 7 + 4 * i) for i, v in enumerate(others)}
+    try:
+        fn = sp.lambdify(x, f.subs(fill), modules="mpmath")
+        good = []
+        with mp.workdps(60):
+            for p in POINTS:
+                try:
+                    num = mp.diff(fn, mp.mpf(p.p) / p.q, n)
+                    val = mp.mpmathify(sp.N(ans.subs(fill).subs(x, p), 40))
+                    if mp.isfinite(num) and mp.isfinite(val):
+                        good.append(abs(num - val) <= mp.mpf(10) ** -8 * max(1, abs(val)))
+                except Exception:
+                    continue
+    except Exception:
+        return None
+    return {"ok": all(good), "text": "Ответ совпал с численной производной в нескольких точках."} if good else None
 
 
 # ---------- Интегралы ----------
@@ -338,7 +477,7 @@ def has_unknown(r):
 
 def solve_integral(t):
     x = symbol(t.get("var"))
-    f = parse(t.get("f"), what="подынтегральная функция")
+    f, x = real_var(parse(t.get("f"), what="подынтегральная функция"), x)
     a, b = (t.get("a") or "").strip(), (t.get("b") or "").strip()
     w = Work()
     w.tag("integral")
@@ -365,15 +504,24 @@ def solve_integral(t):
     if a:
         lo, hi = parse(a, what="нижний предел"), parse(b, what="верхний предел")
         I = rf"\int_{{{L(lo)}}}^{{{L(hi)}}} {L(f)}\,d{L(x)}"
-        val = sp.integrate(f, (x, lo, hi))
+        val, where = definite(f, x, lo, hi)
         w.tag("newton")
+        if val is None:
+            if where:
+                at = ", ".join(rf"{L(x)} = {L(v)}" for v in where)
+                w.add(f"Подынтегральная функция не ограничена вблизи {M(at)}, поэтому интеграл несобственный. "
+                      "Предел первообразной в этой точке бесконечен или не существует.")
+            else:
+                w.add("Интеграл несобственный, и предел первообразной на границе бесконечен или не существует.")
+            return {"problem": I, "answer": rf"{I} \text{{ расходится}}", "work": w, "check": None,
+                    "plot": plot(x, ("f", f), span=window(lo, hi)), "note": "Интеграл расходится, конечного значения у него нет."}
         if closed and lo.is_finite and hi.is_finite:
             w.add("Применяем формулу Ньютона — Лейбница.",
                   rf"\left.{L(F)}\right|_{{{L(lo)}}}^{{{L(hi)}}}", 0)
         if val.has(sp.Integral):
             num = sp.N(sp.Integral(f, (x, lo, hi)))
             return {"problem": I, "answer": rf"{I} \approx {L(num)}", "work": w, "check": None,
-                    "plot": plot(x, ("f", f)), "note": "Точное значение не выражается через элементарные функции, показано приближённое."}
+                    "plot": plot(x, ("f", f), span=window(lo, hi)), "note": "Точное значение не выражается через элементарные функции, показано приближённое."}
         approx = rf" \approx {sp.N(val, 8)}" if val.is_number and val.is_finite and not val.is_Rational else ""
         chk = None
         if val.is_number and val.is_finite and lo.is_finite and hi.is_finite:
@@ -382,8 +530,12 @@ def solve_integral(t):
                 chk = {"ok": bool(ok), "text": "Значение совпало с численным интегрированием."}
             except Exception:
                 chk = None
-        return {"problem": I, "answer": rf"{I} = {L(val)}{approx}", "work": w, "check": chk,
-                "plot": plot(x, ("f", f))}
+        res = {"problem": I, "answer": rf"{I} = {L(val)}{approx}", "work": w, "check": chk,
+               "plot": plot(x, ("f", f), span=window(lo, hi))}
+        if val.is_number and val.is_real is False:
+            res["note"] = ("Значение получилось комплексным: на отрезке есть точки, где функция не определена "
+                           "в действительных числах, например корень из отрицательного числа.")
+        return res
     I = rf"\int {L(f)}\,d{L(x)}"
     if not closed:
         return {"problem": I, "answer": I, "work": w, "check": None, "plot": plot(x, ("f", f)),
@@ -395,6 +547,35 @@ def solve_integral(t):
     if F.has(sp.Si, sp.Ci, sp.Ei, sp.li, sp.erf, sp.erfi, sp.fresnels, sp.fresnelc):
         res["note"] = "Первообразная не элементарна, поэтому ответ записан через специальную функцию."
     return res
+
+
+def diverges(v):
+    return v.has(sp.nan, sp.zoo, sp.AccumBounds) or v.is_infinite is True
+
+
+def definite(f, x, lo, hi):
+    """Значение определённого интеграла или (None, точки разрыва), если интеграл расходится.
+
+    Отрезок режется по точкам разрыва: иначе расходимость внутри отрезка можно не заметить.
+    """
+    val = sp.integrate(f, (x, lo, hi))
+    cuts = []
+    try:
+        if lo.is_real and hi.is_real and lo != hi:
+            found = sp.singularities(f, x, sp.Interval(sp.Min(lo, hi), sp.Max(lo, hi)))
+            if isinstance(found, sp.FiniteSet) and len(found) <= 6:
+                cuts = sorted(found)
+    except Exception:
+        cuts = []
+    if cuts:
+        edges = sorted({sp.Min(lo, hi), sp.Max(lo, hi), *cuts})
+        parts = [sp.integrate(f, (x, p, q)) for p, q in zip(edges, edges[1:])]
+        bad = [c for c in cuts for p, q, v in zip(edges, edges[1:], parts) if c in (p, q) and diverges(v)]
+        if bad:
+            return None, list(dict.fromkeys(bad))
+        if diverges(val) and not any(v.has(sp.Integral) for v in parts):
+            val = sp.Add(*parts) * (1 if lo < hi else -1)
+    return (None, []) if diverges(val) else (val, [])
 
 
 def with_abs(F, f, x):
@@ -416,7 +597,7 @@ def check_antiderivative(f, F, x):
 
 def solve_limit(t):
     x = symbol(t.get("var"))
-    f = parse(t.get("f"), what="функция")
+    f, x = real_var(parse(t.get("f"), what="функция"), x)
     a = parse(t.get("point"), what="точка")
     side = t.get("side") or "+-"
     if side not in ("+", "-", "+-"):
@@ -426,7 +607,10 @@ def solve_limit(t):
     mark = {"+": "+0", "-": "-0"}.get(side, "") if a.is_finite else ""
     head = rf"\lim_{{{L(x)} \to {L(a)}{mark}}}"
     p = rf"{head} {L(f)}"
-    val = sp.limit(f, x, a, side) if a.is_finite else sp.limit(f, x, a)
+    try:
+        val = sp.limit(f, x, a, side) if a.is_finite else sp.limit(f, x, a)
+    except ValueError:
+        val = None  # SymPy так сообщает, что пределы слева и справа различны
     w = Work()
     w.tag("limit")
     cur = f
@@ -450,7 +634,7 @@ def solve_limit(t):
                   "знаменатель их производными.",
                   rf"{head} \frac{{{L(n)}}}{{{L(m)}}} = {head} \frac{{{L(sp.diff(n, x))}}}{{{L(sp.diff(m, x))}}}")
             n, m = sp.diff(n, x), sp.diff(m, x)
-    else:
+    elif val is not None:
         w.add("Находим значение предела.", rf"{p} = {L(val)}")
     if side == "+-" and a.is_finite:
         l, r = sp.limit(f, x, a, "-"), sp.limit(f, x, a, "+")
@@ -458,7 +642,9 @@ def solve_limit(t):
             w.add(f"Односторонние пределы различны: слева {M(l)}, справа {M(r)}.")
             return {"problem": p, "answer": rf"{p} \text{{ не существует}}", "work": w,
                     "check": {"ok": True, "text": "Сравнены пределы слева и справа."},
-                    "plot": plot(x, ("f", f))}
+                    "plot": plot(x, ("f", f), span=window(a))}
+    if val is None:
+        raise Unsolved()
     chk = None
     if a.is_finite and val.is_finite and val.is_number:
         eps = sp.Rational(1, 100000)
@@ -469,7 +655,8 @@ def solve_limit(t):
                    "text": "Значение функции рядом с точкой совпало с пределом."}
         except Exception:
             chk = None
-    return {"problem": p, "answer": rf"{p} = {L(val)}", "work": w, "check": chk, "plot": plot(x, ("f", f))}
+    return {"problem": p, "answer": rf"{p} = {L(val)}", "work": w, "check": chk,
+            "plot": plot(x, ("f", f), span=window(a))}
 
 
 # ---------- Ряды ----------
@@ -521,11 +708,9 @@ def solve_sum(t):
 
 def solve_taylor(t):
     x = symbol(t.get("var"))
-    f = parse(t.get("f"), what="функция")
+    f, x = real_var(parse(t.get("f"), what="функция"), x)
     a = parse(t.get("point") or "0", what="точка")
-    n = int(t.get("order") or 5)
-    if not 1 <= n <= 20:
-        raise UserError("Порядок разложения должен быть от 1 до 20.")
+    n = integer(t.get("order"), 5, 1, 20, "Порядок разложения")
     w = Work()
     w.tag("taylor")
     w.add("Находим производные в точке разложения и подставляем их в формулу Тейлора.")
@@ -543,7 +728,7 @@ def solve_taylor(t):
     return {"problem": p, "answer": rf"{L(f)} = {L(poly)} + o\left({L(x) if a == 0 else "(" + L(x - a) + ")"}^{{{n}}}\right)", "work": w,
             "check": {"ok": is_true(sp.diff(poly, x, n).subs(x, a) - sp.diff(f, x, n).subs(x, a)),
                       "text": "Старшая производная многочлена совпала с производной функции."},
-            "plot": plot(x, ("f", f), ("многочлен Тейлора", poly))}
+            "plot": plot(x, ("f", f), ("многочлен Тейлора", poly), span=window(a))}
 
 
 # ---------- Матрицы ----------
@@ -555,6 +740,8 @@ def parse_matrix(s):
     data = [[parse(c, what="элемент матрицы") for c in re.split(r"[\s,]+", r.strip()) if c] for r in rows]
     if len({len(r) for r in data}) != 1:
         raise UserError("В строках матрицы разное число элементов.")
+    if any(c.has(sp.oo, sp.zoo, sp.nan) for r in data for c in r):
+        raise UserError("Элементы матрицы должны быть конечными.")
     return sp.Matrix(data)
 
 
@@ -1068,7 +1255,7 @@ def solve_json(task_json):
         res.update(ok=True, steps=w.steps, tags=w.tags)
     except UserError as e:
         res = {"ok": False, "error": str(e)}
-    except Unsolved:
+    except (Unsolved, NotImplementedError):
         res = {"ok": False, "error": "Движок не нашёл решения этой задачи. Попробуйте упростить запись или разбить задачу на части."}
     except Exception as e:
         res = {"ok": False, "error": f"Не удалось решить задачу ({type(e).__name__}). Проверьте запись."}
