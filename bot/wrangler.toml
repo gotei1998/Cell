@@ -1,0 +1,15 @@
+# Настройки бота «Клетки» для Cloudflare Workers. Секреты (BOT_TOKEN, WEBHOOK_SECRET) сюда не пишут:
+# их задают командой `npx wrangler secret put ИМЯ`, см. README.md.
+name = "kletka-bot"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+# Адрес сайта с приложением, со слэшем на конце. Проверьте, что он совпадает с вашим.
+WEBAPP_URL = "https://gotei1998.github.io/Cell/"
+# Суммы поддержки в звёздах, через запятую.
+DONATE_AMOUNTS = "50,150,500"
+# Ваш числовой id в Telegram: туда приходят сообщения о платежах, и только с него работает /refund.
+ADMIN_ID = ""
+# Куда писать по вопросам оплаты, например "@username". Пусто: бот просит ответить в чате.
+SUPPORT_CONTACT = ""

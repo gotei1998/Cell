@@ -3,6 +3,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Клетка</title>
+<meta name="description" content="Решает задачи высшей математики по шагам и проверяет ответ: производные, интегралы, пределы, ряды, матрицы, уравнения.">
+<meta name="theme-color" content="#292929">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Caveat:wght@600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
@@ -16,7 +23,9 @@
   --hand: "Caveat", "Segoe Print", cursive;
 }
 * { box-sizing: border-box }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100% }
 body {
+  margin: 0; -webkit-tap-highlight-color: transparent;
   background-color: var(--paper); color: var(--ink); font: 16px/1.6 var(--body);
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 24px 24px;
@@ -67,8 +76,22 @@ textarea { resize: vertical; min-height: 92px }
 .key summary { cursor: pointer }
 .key p { margin: 6px 0; max-width: 66ch }
 .samples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted) }
+.keys { display: none; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-inline: -4px; padding: 2px 4px }
+.keys::-webkit-scrollbar, .topics::-webkit-scrollbar, #historyList::-webkit-scrollbar { display: none }
+.keys button {
+  flex: none; min-width: 44px; height: 40px; padding: 0 10px; font: 16px var(--mono); color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; touch-action: manipulation;
+}
+.keys button:active { background: var(--soft); transform: scale(.94) }
+.support { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; font-size: 14px; color: var(--muted) }
+.support[hidden] { display: none }
+.support .photo { background: none; text-decoration: none }
+.stars { display: flex; flex-wrap: wrap; gap: 8px }
+.stars[hidden] { display: none }
+.stars button { font: 600 15px var(--body); color: var(--ink); background: var(--field); border: 1px solid var(--blue); padding: 8px 16px; border-radius: 999px; cursor: pointer }
 .samples button { all: unset; cursor: pointer; font: 13px var(--mono); color: var(--blue); border-bottom: 1px dashed var(--blue) }
 #preview { min-height: 32px; overflow-x: auto; color: var(--ink) }
+#preview:empty { display: none }
 #status { font-size: 14px; color: var(--muted) }
 .bar { height: 3px; background: var(--soft); overflow: hidden; margin-top: 6px; max-width: 320px }
 .bar i { display: block; height: 100%; width: 35%; background: var(--blue); animation: slide 1.3s infinite ease-in-out }
@@ -115,16 +138,49 @@ section > h2 { font-size: 18px; margin: 0 0 8px }
 @media (prefers-reduced-motion: reduce) {
   .topics button, .history button, .samples button, .go, .photo, .retry, .key summary { transition: none; transform: none !important }
 }
-@media (max-width: 760px) {
-  .page { display: block }
-  .rail { border-right: 0; border-bottom: 2px solid var(--red); min-height: 0; padding-block: 18px 12px; padding-right: 0 }
-  .brand { font-size: 36px }
-  .tagline { margin-bottom: 12px }
-  .topics { display: flex; flex-wrap: wrap; gap: 4px }
-  .topics button { padding: 4px 9px; font-size: 14px; border: 1px solid var(--line) }
-  .history { display: none }
-  main { padding-left: 0; padding-top: 20px }
+@media (max-width: 760px), (pointer: coarse) {
+  .keys { display: flex }
 }
+@media (max-width: 760px) {
+  .page { display: block; padding-bottom: env(safe-area-inset-bottom, 0px) }
+  .rail { border-right: 0; border-bottom: 2px solid var(--red); min-height: 0; padding-block: 14px 10px; padding-right: 0 }
+  .brand { font-size: 34px }
+  .tagline { margin: 4px 0 10px }
+  /* Темы и недавние задачи: одна строка, которая листается пальцем, а не три ряда кнопок. */
+  .topics, #historyList {
+    display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none;
+    margin-inline: -16px; padding: 2px 16px; scroll-padding-inline: 16px;
+  }
+  .topics button { flex: none; padding: 9px 14px; font-size: 15px; border: 1px solid var(--line); white-space: nowrap }
+  .history { margin-top: 10px }
+  .history h2 { display: none }
+  .history button {
+    flex: none; width: auto; max-width: 62vw; min-height: 40px; padding: 9px 12px; border: 1px dashed var(--line); border-radius: 999px;
+  }
+  .history button:hover { transform: none }
+  main { padding-left: 0; padding-top: 16px; padding-bottom: 32px; gap: 20px }
+  h1 { font-size: 22px }
+  form { padding: 12px }
+  .actions { gap: 10px }
+  .go, .photo {
+    flex: 1 1 140px; min-height: 46px; display: inline-flex; align-items: center; justify-content: center; text-align: center;
+    padding-inline: 14px; touch-action: manipulation;
+  }
+  .samples { flex-basis: 100%; gap: 6px }
+  .samples button { border: 1px solid var(--line); border-radius: 999px; padding: 10px 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .samples button:hover { border-bottom-color: var(--line) }
+  .key summary { padding-block: 8px }
+  .answer { padding: 12px }
+  .steps li.d1 { padding-left: 12px }
+  .steps li.d2 { margin-left: 10px; padding-left: 12px }
+  .steps li.d3 { margin-left: 20px; padding-left: 12px }
+  .theory article { padding: 10px 12px }
+  #plot { padding: 4px }
+}
+/* Внутри Telegram название уже стоит в шапке окна, а «Решить» живёт в нижней кнопке Telegram. */
+.tg .brand, .tg .tagline { display: none }
+.tg .rail { padding-top: 10px }
+.tg.mainbtn .go { display: none }
 </style>
 
 <div class="page">
@@ -145,6 +201,7 @@ section > h2 { font-size: 18px; margin: 0 0 8px }
     <form id="form" autocomplete="off">
       <div class="row" id="fields"></div>
       <div id="preview" class="mathwrap" aria-live="polite"></div>
+      <div class="keys" id="keys" role="toolbar" aria-label="Знаки для формул"></div>
       <div class="actions">
         <button class="go" id="go" type="submit">Решить</button>
         <label class="photo" for="photoInput">Загрузить фото</label>
@@ -167,6 +224,11 @@ section > h2 { font-size: 18px; margin: 0 0 8px }
       <h2>Теория по теме</h2>
       <div class="theory" id="theory"></div>
     </section>
+    <footer class="support" id="support" hidden>
+      <a class="photo" id="donate" href="#" role="button">⭐ Поддержать проект</a>
+      <span id="supportNote">Клетка бесплатна. Поддержка добровольная, через Telegram Stars.</span>
+      <div class="stars" id="stars" hidden></div>
+    </footer>
   </main>
 </div>
 
@@ -174,8 +236,13 @@ section > h2 { font-size: 18px; margin: 0 0 8px }
 <script>
 window.MathJax = { tex: { inlineMath: [['\\(', '\\)']] }, svg: { fontCache: 'global' }, startup: { typeset: false } };
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"></script>
+<script src="runtime/mathjax-tex-svg.js"></script>
 <script>
+// Бот в Telegram (папка bot/): имя без @ и адрес его сервера. Пока оба пусты, блок поддержки скрыт.
+const BOT_USERNAME = '';
+const BOT_API = '';
+const DONATE_STARS = [50, 150, 500];
+
 const LIMIT_MS = 45000;
 const LOAD_LIMIT_MS = 150000;
 
@@ -266,6 +333,7 @@ const THEORY = {
 };
 
 const $ = (id) => document.getElementById(id);
+const tg = window.Telegram && Telegram.WebApp;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 let topic = 'integral', worker, ready = false, seq = 0, pending = null, loadTimer;
 
@@ -293,7 +361,7 @@ function startWorker() {
       clearTimeout(loadTimer);
       ready = true;
       setStatus('');
-      $('go').disabled = false;
+      setGo(true);
       if (window.onEngineReady) onEngineReady();
     } else if (data.type === 'fatal') {
       failLoad();
@@ -307,6 +375,15 @@ function startWorker() {
   worker.onerror = failLoad;
 }
 
+// Кнопка «Решить» бывает двух видов: на странице и нижняя кнопка Telegram. Состояние у них общее.
+let mainButton = null;
+function setGo(enabled, busy) {
+  $('go').disabled = !enabled;
+  if (!mainButton) return;
+  if (busy) mainButton.showProgress(false); else mainButton.hideProgress();
+  if (enabled) mainButton.enable(); else mainButton.disable();
+}
+
 function setStatus(text, busy) {
   $('status').innerHTML = text ? esc(text) + (busy ? '<div class="bar"><i></i></div>' : '') : '';
 }
@@ -317,7 +394,7 @@ function solve(task) {
     const timer = setTimeout(() => {
       worker.terminate();
       pending = null;
-      $('go').disabled = true;
+      setGo(false, true);
       setStatus('Перезапускаю движок…', true);
       startWorker();
       resolve({ ok: false, error: 'Задача считается слишком долго, и вычисление остановлено. Попробуйте упростить запись.' });
@@ -342,8 +419,8 @@ function renderForm(values) {
     const id = 'in-' + f.id;
     let control;
     if (f.options) control = `<select id="${id}">${f.options.map(([o, n]) => `<option value="${esc(o)}"${o === (values && values[f.id] || f.value) ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
-    else if (f.area) control = `<textarea id="${id}" spellcheck="false">${v}</textarea>`;
-    else control = `<input id="${id}" value="${v}" spellcheck="false" autocapitalize="off">`;
+    else if (f.area) control = `<textarea id="${id}" spellcheck="false" autocapitalize="off" autocorrect="off">${v}</textarea>`;
+    else control = `<input id="${id}" value="${v}" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" enterkeyhint="go"${f.id === 'order' ? ' inputmode="numeric"' : ''}>`;
     return `<div class="field${f.wide ? ' wide' : ''}"><label for="${id}">${esc(f.label)}</label>${control}</div>`;
   }).join('');
   $('samples').innerHTML = 'Примеры: ' + t.samples.map((s, i) =>
@@ -370,7 +447,8 @@ const DEFAULT_TAGS = {
 
 function drawPlot(series) {
   if (!series || !series.length) { $('plotBox').hidden = true; return; }
-  const W = 640, H = 300, P = 30;
+  // Рисуем в пикселях экрана: на телефоне подписи осей остаются читаемыми, а не сжимаются вместе с графиком.
+  const W = Math.max(300, Math.min(640, $('result').clientWidth - 18 || 640)), H = W < 480 ? 250 : 300, P = 30;
   const xs = series[0].points, x0 = xs[0][0], x1 = xs[xs.length - 1][0];
   const tick = (span) => { const p = Math.pow(10, Math.floor(Math.log10(span))); return p * [1, 2, 5, 10].find((m) => m * p >= span); };
   const ys = series.flatMap((s) => s.points.map((p) => p[1]).filter((v) => v !== null)).sort((a, b) => a - b);
@@ -378,7 +456,7 @@ function drawPlot(series) {
   if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
   const pad = (hi - lo) * .15; lo -= pad; hi += pad;
   const X = (x) => P + (x - x0) / (x1 - x0) * (W - 2 * P), Y = (y) => H - P - (y - lo) / (hi - lo) * (H - 2 * P);
-  const step = tick((hi - lo) / 5), xstep = tick((x1 - x0) / 6);
+  const step = tick((hi - lo) / 5), xstep = tick((x1 - x0) / (W < 480 ? 4 : 6));
   let grid = '';
   for (let x = Math.ceil(x0 / xstep) * xstep; x <= x1 + 1e-9; x += xstep) grid += `<line x1="${X(x)}" x2="${X(x)}" y1="${P / 2}" y2="${H - P}" stroke="var(--grid)"/><text x="${X(x)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">${+x.toFixed(4)}</text>`;
   for (let y = Math.ceil(lo / step) * step; y <= hi; y += step) grid += `<line x1="${P}" x2="${W - P}" y1="${Y(y)}" y2="${Y(y)}" stroke="var(--grid)"/><text x="${P - 5}" y="${Y(y) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${+y.toFixed(4)}</text>`;
@@ -571,15 +649,21 @@ async function scan(file) {
 }
 window.scanFile = scan;
 
-async function submit() {
+async function submit(byUser) {
   if (!ready || pending) return;
   const task = collect();
-  $('go').disabled = true;
+  setGo(false, true);
   setStatus('Считаю…', true);
   const r = await solve(task);
-  if (ready) { $('go').disabled = false; setStatus(''); }
+  if (ready) { setGo(true); setStatus(''); }
   renderResult(r);
   if (r.ok) pushHistory(task);
+  if (byUser === true) {
+    // На телефоне ответ оказывается ниже формы и клавиатуры, поэтому подводим к нему экран.
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    if (window.innerWidth <= 760) $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(r.ok ? 'success' : 'error');
+  }
 }
 
 function setTopic(k, values) {
@@ -597,14 +681,14 @@ $('samples').addEventListener('click', (e) => {
   if (i === undefined) return;
   const t = TOPICS[topic], values = Object.fromEntries(t.fields.map((f) => [f.id, f.value]));
   renderForm({ ...values, ...t.samples[i] });
-  submit();
+  submit(true);
 });
 $('historyList').addEventListener('click', (e) => {
   const i = e.target.dataset.h;
   if (i === undefined) return;
   const { task } = loadHistory()[i];
   setTopic(task.topic, task);
-  submit();
+  submit(true);
 });
 $('photoInput').addEventListener('change', (e) => { scan(e.target.files[0]); e.target.value = ''; });
 $('keyFields').innerHTML = PROVIDERS.map((p, i) => `<div class="field"><label for="key-${p.id}">${i + 1}. Ключ ${p.name}</label><input id="key-${p.id}" type="password" autocomplete="off" spellcheck="false"></div>`).join('');
@@ -618,24 +702,95 @@ $('status').addEventListener('click', (e) => {
   setStatus('Загружаю вычислительный движок…', true);
   startWorker();
 });
-$('form').addEventListener('submit', (e) => { e.preventDefault(); submit(); });
+$('form').addEventListener('submit', (e) => { e.preventDefault(); submit(true); });
 
-window.onEngineReady = () => { window.onEngineReady = null; submit(); };
+// Кеш движка для повторных заходов и работы без сети (sw.js). Вне https браузер его не разрешает.
+const cacheReady = 'serviceWorker' in navigator && location.protocol === 'https:'
+  ? navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).catch(() => null) : Promise.resolve(null);
+
+window.onEngineReady = () => {
+  window.onEngineReady = null;
+  submit();
+  cacheReady.then((reg) => { if (reg && reg.active) reg.active.postMessage({ type: 'precache' }); });
+};
 setTopic('integral');
 renderHistory(loadHistory());
-$('go').disabled = true;
+setGo(false);
 setStatus('Загружаю вычислительный движок. В первый раз это занимает 10–20 секунд.', true);
 startWorker();
 
-// Внутри Telegram: на весь экран, цвета шапки в тон сайту, лёгкая отдача на нажатия.
-const tg = window.Telegram && Telegram.WebApp;
+// Клавиши для формул: на телефоне знаки ^ ( ) √ π спрятаны глубоко в клавиатуре.
+const KEYS = [['^', '^'], ['(', '('], [')', ')'], ['√', 'sqrt('], ['π', 'pi'], ['∞', 'oo'], ['/', '/'], ['*', '*'], ['|x|', '|'],
+  ['sin', 'sin('], ['cos', 'cos('], ['tg', 'tg('], ['ln', 'ln('], ['eˣ', 'e^('], ['log₂', 'log_2('], ["y'", "'"], ['=', '=']];
+let lastField = null;
+$('keys').innerHTML = KEYS.map(([label], i) => `<button type="button" data-k="${i}" tabindex="-1">${esc(label)}</button>`).join('');
+$('fields').addEventListener('focusin', (e) => { if (e.target.matches('input, textarea')) lastField = e.target; });
+// Нажатие на клавишу не должно забирать фокус у поля, иначе закроется клавиатура телефона.
+for (const type of ['pointerdown', 'mousedown']) $('keys').addEventListener(type, (e) => e.preventDefault());
+$('keys').addEventListener('click', (e) => {
+  const key = KEYS[e.target.dataset.k];
+  if (!key) return;
+  const el = lastField && lastField.isConnected ? lastField : $('fields').querySelector('input, textarea');
+  if (!el) return;
+  el.focus();
+  el.setRangeText(key[1], el.selectionStart, el.selectionEnd, 'end');
+});
+
+// Внутри Telegram: на весь экран, цвета шапки в тон сайту, нижняя кнопка «Решить», лёгкая отдача на нажатия.
 if (tg && tg.initData) {
+  const paper = '#292929';
+  const has = (v) => !tg.isVersionAtLeast || tg.isVersionAtLeast(v);
+  document.documentElement.classList.add('tg');
   tg.ready();
   tg.expand();
-  tg.setHeaderColor('#292929');
-  tg.setBackgroundColor('#292929');
+  if (has('6.1')) { tg.setHeaderColor(paper); tg.setBackgroundColor(paper); }
+  if (has('7.10') && tg.setBottomBarColor) tg.setBottomBarColor(paper);
+  // Страница длинная: без этого прокрутка вверх сворачивает приложение.
+  if (has('7.7') && tg.disableVerticalSwipes) tg.disableVerticalSwipes();
+  if (tg.MainButton && tg.MainButton.setParams) {
+    mainButton = tg.MainButton;
+    mainButton.setParams({ text: 'Решить', color: '#c88e9b', text_color: paper });
+    mainButton.onClick(() => submit(true));
+    mainButton.show();
+    document.documentElement.classList.add('mainbtn');
+    setGo(!$('go').disabled, $('go').disabled);
+  }
   document.addEventListener('click', (e) => {
     if (e.target.closest('button, .photo') && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+  });
+}
+
+// Добровольная поддержка через Telegram Stars. Счёт выставляет бот: в приложении прямо на месте, на сайте через чат с ботом.
+const inTelegram = !!(tg && tg.initData);
+if (BOT_USERNAME || (BOT_API && inTelegram)) {
+  const botLink = BOT_USERNAME ? `https://t.me/${BOT_USERNAME}?start=donate` : '';
+  $('support').hidden = false;
+  if (botLink) $('donate').href = botLink;
+  if (!inTelegram) $('donate').target = '_blank';
+  $('stars').innerHTML = DONATE_STARS.map((n) => `<button type="button" data-n="${n}">${n} ⭐</button>`).join('');
+  $('donate').addEventListener('click', (e) => {
+    if (!inTelegram) return;
+    e.preventDefault();
+    if (BOT_API && tg.openInvoice) $('stars').hidden = !$('stars').hidden;
+    else tg.openTelegramLink(botLink);
+  });
+  $('stars').addEventListener('click', async (e) => {
+    const amount = Number(e.target.dataset.n);
+    if (!amount) return;
+    $('supportNote').textContent = 'Готовлю счёт…';
+    try {
+      const res = await fetch(BOT_API.replace(/\/$/, '') + '/api/invoice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData: tg.initData, amount }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.link) throw new Error(data.error || 'нет ответа');
+      tg.openInvoice(data.link, (status) => {
+        $('supportNote').textContent = status === 'paid' ? 'Спасибо за поддержку!' : 'Оплата не прошла или отменена.';
+        if (status === 'paid') $('stars').hidden = true;
+      });
+    } catch (err) {
+      $('supportNote').textContent = 'Не удалось выставить счёт. Попробуйте через чат с ботом.';
+    }
   });
 }
 </script>
